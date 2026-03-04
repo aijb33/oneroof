@@ -1,64 +1,119 @@
-# OneRoof: AI-First Listing Operating System
+# System Architecture: OneRoof Listing Operating System
 
-OneRoof is a comprehensive PropTech SaaS designed to transform the fragmented real estate marketing workflow into a unified, AI-driven experience. Traditionally, real estate agents spend hours manually coordinating virtual staging, drafting property descriptions, checking for Fair Housing compliance, and building individual property websites—often across four or five different platforms. This fragmentation leads to high operational overhead, inconsistent branding, and significant legal risk regarding fair housing violations. OneRoof solves this by centralizing the entire "Listing Lifecycle" into a single intelligent platform that automates asset creation while enforcing strict regulatory guardrails at the edge.
+This document outlines the technical design, data flow, and AI orchestration patterns of the OneRoof platform. It is intended for senior engineers and AI architects evaluating the system's scalability, security, and sophisticated use of LLMs.
 
-Visit Our Site Here: oneroofhq.com.
+```mermaid
+graph TD
+    %% Global Styling
+    classDef frontend fill:#0ea5e9,stroke:#0369a1,stroke-width:2px,color:#fff;
+    classDef edge fill:#f97316,stroke:#c2410c,stroke-width:2px,color:#fff;
+    classDef ai fill:#a855f7,stroke:#7e22ce,stroke-width:2px,color:#fff;
+    classDef data fill:#10b981,stroke:#047857,stroke-width:2px,color:#fff;
+    classDef infra fill:#64748b,stroke:#334155,stroke-width:1px,color:#fff;
 
-## Core Features
+    subgraph Client_Layer [Frontend: React 18 + TypeScript]
+        UI[Agent Dashboard / Editor]:::frontend
+        Vite[Vite Optimized Build]:::frontend
+    end
 
-*   **AI Virtual Staging:** High-fidelity room transformation that preserves architectural integrity (windows, flooring, structures) while adding stylized furniture and decor.
-*   **Smart Copywriter:** Generates captivating, professional listing descriptions tailored to specific property features and neighborhood vibes.
-*   **Compliance Guard:** A real-time auditing engine that scans listing text for Fair Housing Act (FHA) violations, MLS rule breaks, and ethical steering language.
-*   **Neighborhood Intelligence:** Automated aggregation of local schools, transit scores, and "lifestyle" amenities (coffee, parks, gyms) via geospatial data.
-*   **Microsite Builder:** Instant deployment of high-conversion, single-property websites featuring interactive before/after sliders and lead capture forms.
-*   **Agent Hub:** A centralized dashboard for managing property "Vitals," marketing assets, and buyer leads across an entire listing portfolio.
-*   **Association-First Architecture:** Multi-tenant infrastructure designed to be whitelabeled and deployed by large real estate boards or brokerages.
-*   **Verified Tour Pass:** A standardized digital entry system to track and verify unrepresented buyers during property tours.
+    subgraph Edge_Orchestration [Edge Compute: Cloudflare Workers]
+        Proxy[Secure API Gateway / Proxy]:::edge
+        Auth[JWT & Credit Validator]:::edge
+        Orch[Linear AI Orchestrator]:::edge
+        Stripe_WH[Stripe Webhook Handler]:::edge
+    end
 
-## Technical Stack
+    subgraph AI_Intelligence_Plane [AI & Intelligence Layer]
+        Gemini[Gemini 2.5 Flash: Vision]:::ai
+        OpenRouter[OpenRouter/GLM: Reasoning]:::ai
+        NanoBanana[Nano Banana: Geometry]:::ai
+    end
 
-*   **React 18 / TypeScript:** Core frontend framework providing a type-safe, component-driven architecture for complex UI state management.
-*   **Vite:** High-performance build tool and development server used to optimize asset delivery and developer experience.
-*   **Supabase (PostgreSQL):** Backend-as-a-Service providing authentication, real-time database capabilities, and row-level security (RLS).
-*   **Cloudflare Workers:** Edge computing layer used for secure AI API proxying, credit-based rate limiting, and Stripe webhook orchestration.
-*   **Tailwind CSS:** Utility-first styling engine for building a responsive, high-fidelity "Staging Design System."
-*   **Google Gemini 2.5 Flash:** Multimodal LLM utilized for advanced image analysis, alt-text generation, and architectural preservation logic.
-*   **OpenRouter API:** Unified interface for accessing high-reasoning text models (e.g., GLM-4.5) for sophisticated copywriting tasks.
-*   **Nano Banana API:** Specialized real estate computer vision service for optimized geometry and lighting in virtual staging.
-*   **Stripe:** Enterprise-grade billing infrastructure for subscription management and dynamic credit top-ups.
-*   **Leaflet.js:** Interactive mapping library for visualizing neighborhood context and property proximity data.
+    subgraph Persistence_Infrastructure [Data & Storage Layer]
+        DB[(Supabase: PostgreSQL + pgvector)]:::data
+        RLS[Row-Level Security]:::data
+        R2[Cloudflare R2: Asset CDN]:::infra
+        OSM[OpenStreetMap / Overpass]:::infra
+    end
 
-## Architecture Overview
+    %% Interaction Flows
+    UI -- "HTTPS/JWT" --> Proxy
+    Proxy --> Auth
+    Auth -- "RPC Call" --> DB
+    Proxy --> Orch
+    Orch -- "Vision Analysis" --> Gemini
+    Orch -- "Compliance Audit" --> OpenRouter
+    Orch -- "Room Staging" --> NanoBanana
+    Orch -- "Geodata Aggregation" --> OSM
+    Gemini & NanoBanana -- "Push Assets" --> R2
+    R2 -- "CDN Delivery" --> UI
+    OpenRouter -- "Structured JSON" --> UI
+    Stripe_WH -- "Update Tier" --> DB
+```
 
-OneRoof utilizes a "Thin Client, Heavy Edge" architecture. User inputs—such as raw property photos or street addresses—are captured via the React frontend and transmitted with a Supabase JWT to a Cloudflare Worker. This edge worker serves as the secure orchestration layer; it validates the user's remaining "Credits," retrieves global AI configuration settings from Supabase, and dispatches parallel requests to various AI providers (Gemini for images, OpenRouter for text). The resulting data is then "cleaned" (e.g., parsing AI JSON or resizing R2-hosted images) before being persisted to the database and returned to the client. This flow ensures that sensitive API keys are never exposed to the browser and that compute-heavy tasks like compliance scanning are offloaded from the main UI thread.
+## 1. System Components
 
-## AI Capabilities
+OneRoof is built on a decoupled, edge-first architecture designed for high availability and secure AI integration.
 
-### 1. Agent Orchestration Patterns
-The platform employs a **Linear Orchestrator** pattern (see `CampaignWizard.tsx`) that sequences multiple specialized AI "tools." When a user launches a campaign, the orchestrator triggers a Neighborhood Research Tool (Location Intelligence), feeds that output into a Creative Copywriter Tool (LLM), and finally passes the text to a Compliance Auditor. This mimics a multi-step human workflow while maintaining state across the entire chain.
+*   **Frontend (Application Layer):** A React 18 Single Page Application (SPA) built with TypeScript and Vite. It manages complex UI states for virtual staging, document editing, and project workflows.
+*   **Backend & Edge Orchestration (Compute Layer):** A Cloudflare Worker serves as the primary backend. It acts as a secure API gateway, handling authentication, credit-based rate limiting, Stripe integration, and AI provider proxying.
+*   **Database (Persistence Layer):** Supabase (PostgreSQL) provides a relational foundation with Row-Level Security (RLS). It handles user profiles, project metadata, and audit logs.
+*   **AI Layer (Intelligence Layer):**
+    *   **Text Intelligence:** OpenRouter (GLM-4.5) for reasoning-heavy copywriting and compliance analysis.
+*   **Visual Intelligence:** Google Gemini 2.5 Flash for multimodal room analysis and architectural preservation.
+    *   **Computer Vision:** Nano Banana for specialized real estate staging geometry.
+*   **Payment Processing:** Stripe API integrated via frontend elements and backend webhooks for subscription lifecycle management.
+*   **Asset Storage:** Cloudflare R2 for performant, global storage of high-resolution property images and generated marketing assets.
 
-### 2. Compliance Scanning Logic
-OneRoof uses a **Hybrid Compliance Engine**. Local scanning (regex/deterministic) identifies common prohibited terms (e.g., "walking distance," "family-friendly"), while a Semantic LLM scan detects nuanced violations like "familial steering" or "demographic targeting" that simple keyword filters often miss.
+## 2. Technical Data Flow: Listing Generation
 
-### 3. Vector Search Implementation
-The system is architected for **Semantic Property Retrieval** using `pgvector` in the Supabase PostgreSQL layer. This allows the platform to store listing descriptions as high-dimensional embeddings, enabling agents to find "comparable listings" based on architectural style and neighborhood "vibe" rather than just bed/bath counts.
+The following sequence describes the lifecycle of a listing generation event, specifically focused on the **MLS Launchpad** workflow:
 
-### 4. LLM Integrations
-The application features a **Provider-Agnostic LLM Plane**. Through a centralized `configService`, administrators can toggle the global model provider (Gemini vs. OpenRouter) without modifying component-level code. This enables seamless switching between models based on cost, latency, or performance requirements.
+1.  **Ingestion:** The user provides a property address. The frontend calls `locationIntelligenceService.ts`.
+2.  **Context Gathering:** The request is proxied through the Cloudflare Worker to the Google Search API to aggregate neighborhood data (schools, transit, local POIs).
+3.  **Authentication & Credits:** Before any AI call, the Cloudflare Worker validates the user's Supabase JWT and executes a `deduct_credits` RPC call in the database. If credits are insufficient, the flow terminates at the edge.
+4.  **Semantic Synthesis:** The aggregated neighborhood data is passed to the LLM via `aiTextService.ts` with a "Creative Copywriter" system prompt.
+5.  **Multi-Modal Analysis:** If property photos are present, Gemini 2.5 Flash Lite analyzes the imagery to extract "Vitals" (flooring type, natural light, room purpose) to ground the text generation in reality.
+6.  **Compliance Filter:** The generated draft is passed through the `Hybrid Compliance Engine`.
+7.  **Output:** The final JSON-structured payload is returned to the frontend, where it is presented in an editable UI before final persistence to the `projects` table.
 
-## Setup & Environment Variables
+## 3. AI & Agent Architecture
 
-To run OneRoof locally, the following environment variables are required in your `.env` or Cloudflare Wrangler configuration:
+### Orchestration Patterns
+OneRoof utilizes a **Linear Orchestrator** pattern. Unlike a standard "chat" interface, the system sequences discrete AI "Tools" (Search -> Analyze -> Write -> Audit). This ensures that each LLM call has the narrowest possible context window, reducing hallucinations and costs.
 
-**Frontend (Vite):**
-*   `VITE_SUPABASE_URL`: Your Supabase project URL.
-*   `VITE_SUPABASE_ANON_KEY`: Your Supabase anonymous public key.
+### Prompt Engineering & Context Injection
+Prompts are dynamically constructed using **Project Vitals**. The context injected into the LLM includes:
+*   **Property Schema:** Bed/Bath/SqFt and Construction Status.
+*   **Geospatial Context:** The top 5 neighborhood amenities found during the research phase.
+*   **Regulatory Constraints:** Hardcoded system instructions for Fair Housing (FHA) compliance.
 
-**Backend (Cloudflare Worker):**
-*   `SUPABASE_SERVICE_ROLE_KEY`: Admin access for credit deduction and global config.
-*   `GEMINI_API_KEY`: Google AI Studio key for image/multimodal tasks.
-*   `OPENROUTER_API_KEY`: Access key for diverse LLM text generation.
-*   `NANO_BANANA_API_KEY`: Specialized staging API key.
-*   `STRIPE_SECRET_KEY`: Backend key for processing payments.
-*   `GOOGLE_SEARCH_API_KEY`: For neighborhood data aggregation.
-*   `GOOGLE_SEARCH_CX`: Google Custom Search Engine ID.
+### Validation & Human-in-the-loop
+*   **Structural Validation:** The system uses JSON-mode prompts. The `parseAIJson` utility cleans LLM artifacts (like `<think>` tags or markdown blocks) before parsing.
+*   **Human Checkpoints:** Generated assets are never "published" automatically. The `CampaignWizard` provides a side-by-side editor where agents must review and manually "Save Edits" before the data is committed.
+
+## 4. Security & Governance
+
+### Secure AI Proxy
+The frontend **never** communicates directly with AI providers. The Cloudflare Worker acts as a secure proxy, allowing for:
+*   **Secret Management:** API keys are stored in encrypted Worker environment variables.
+*   **Egress Control:** The Worker scrubs sensitive metadata from AI responses before they reach the client.
+
+### Compliance & Ethical Guardrails
+The platform implements a **Defense-in-Depth** compliance strategy:
+1.  **Deterministic Scan:** A local regex-based engine in `complianceUtils.ts` instantly flags "blacklisted" terms.
+2.  **Semantic Audit:** An LLM-based "Federal Auditor" agent analyzes the text for subtle steering, demographic exclusion, or predatory language.
+3.  **MLS Enforcement:** Specific rules regarding contact information and solicitation are enforced via the system prompt logic.
+
+## 5. Database Schema Overview
+
+The Supabase PostgreSQL schema is designed for multi-tenancy and auditability:
+
+*   **`profiles`**: Owns user identity, subscription tier, and current credit balance.
+*   **`projects`**: The central entity containing property vitals, AI-generated descriptions, neighborhood data, and image references.
+*   **`request_logs`**: A high-volume table tracking every AI action, used for billing reconciliation and usage analytics.
+*   **`associations`**: (Enterprise layer) Manages group-level settings for brokerages or real estate boards, enabling whitelabeling features.
+*   **`microsite_settings`**: Stores configuration for the dynamic property sites, including theme selection and lead capture preferences.
+
+---
+*Last Updated: March 2026*
