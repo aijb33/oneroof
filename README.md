@@ -75,7 +75,6 @@ The following sequence describes the lifecycle of a listing generation event, sp
 4.  **Semantic Synthesis:** The aggregated neighborhood data is passed to the LLM via `aiTextService.ts` with a "Creative Copywriter" system prompt.
 5.  **Multi-Modal Analysis:** If property photos are present, Gemini 2.5 Flash Lite analyzes the imagery to extract "Vitals" (flooring type, natural light, room purpose) to ground the text generation in reality.
 6.  **Compliance Filter:** The generated draft is passed through the `Hybrid Compliance Engine`.
-![Alt text](oneroof/Screenshot 2026-03-04 201748.png)
 7.  **Output:** The final JSON-structured payload is returned to the frontend, where it is presented in an editable UI before final persistence to the `projects` table.
 
 ## 3. AI & Agent Architecture
